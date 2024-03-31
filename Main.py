@@ -1,16 +1,17 @@
 import datetime
 import os
-import re
+import shutil
 import threading
 import tkinter as tk
 from tkinter import *
 import numpy as np
 import pandas as pd
 import ttkbootstrap as ttk
+from tkinter import filedialog, messagebox
 import cv2
 from PIL import Image, ImageTk
 import dlib
-from features_extraction_to_csv import main
+from features_extraction_to_csv import feature_extraction
 from mysql_query import MysqlQuery
 
 class AttendanceTracking:
@@ -33,6 +34,8 @@ class AttendanceTracking:
         self.name = None
         self.recognition_mode = False
         self.previous_time = datetime.datetime.now()
+        self.progress_bar = None
+        self.check_progress_boolean = False
         # Face Recognition Variable
         
         self.face_features_known_list = []
@@ -74,7 +77,7 @@ class AttendanceTracking:
         self.label_face_cnt = tk.Label(self.frame_right_info, text="Faces in current frame: ")
         self.log_all = tk.Label(self.frame_right_info)
 
-
+        
 
         # Face Recognition Function
         self.video_capture = cv2.VideoCapture(0)
@@ -86,9 +89,10 @@ class AttendanceTracking:
         self.get_face_database()
         self.wraper_switch_ui()
         self.process()
-
+    
     def get_face_database(self):
         if os.path.exists("data/features_all.csv"):
+            self.face_name_known_list = []
             path_features_known_csv = "data/features_all.csv"
             csv_rd = pd.read_csv(path_features_known_csv, header=None)
             for i in range(csv_rd.shape[0]):
@@ -129,15 +133,83 @@ class AttendanceTracking:
 
     def draw_switch_ui(self):
         # UI for switching between modes
-        self.switch_frame.place(relx=0.75, rely=0.05, relwidth=0.2, relheight=0.25)
+        self.switch_frame.place(relx=0.60, rely=0.05, relwidth=1, relheight=0.4)
         self.switch_mode()
+
+        manage_database_btn = ttk.Button(self.switch_frame,
+                                         text="Database Management",
+                                         bootstyle = "success, outline",
+                                         command=self.database_management_toplevel)
         face_recognition_btn = ttk.Checkbutton(self.switch_frame,
                                                text="Face Recognition",
                                                variable=BooleanVar(value=True),
                                                command=self.switch_mode,
                                                bootstyle="success-round-toggle")
-        face_recognition_btn.pack(side="top", fill="both")
+        manage_database_btn.grid(row=0, column=1, padx=10, pady=10)
+        face_recognition_btn.grid(row=0, column=0, padx=10, pady=10)
 
+    def database_management_toplevel(self):
+        folder_path = self.path_photos_from_camera
+        # Database Management UI variables
+        self.management_toplevel = tk.Toplevel()
+        self.management_toplevel.title("Database management")
+        self.management_toplevel.geometry("700x500")
+        self.selected_folder = tk.StringVar()
+        self.selected_folder.set(folder_path)
+        self.file_listbox = tk.Listbox(self.management_toplevel,
+                                       selectmode=tk.MULTIPLE)
+
+        # list down users
+        self.file_listbox.pack(fill=tk.BOTH,padx=20, expand=True)
+
+        self.populate_folders(folder_path)
+        delete_folder_btn = ttk.Button(self.management_toplevel, 
+                                       text="Delete Users",
+                                       command=self.delete_folder)
+        delete_folder_btn.pack(side='bottom', padx=10, pady=20)
+
+    def populate_folders(self, folder_path):
+        for item in os.listdir(folder_path):
+            if os.path.isdir(os.path.join(folder_path, item)):
+                # Extract just the folder name
+                folder_name = os.path.basename(item)
+                self.file_listbox.insert(ttk.END, folder_name)
+
+    def delete_folder(self):
+        selected_items = self.file_listbox.curselection()
+        selected_folders = [self.file_listbox.get(index) for index in selected_items]
+        users_deleted = "User Deleted: \n"
+        for index, x in enumerate(selected_folders):
+            users_deleted += f"Index {index + 1}. {x}, \n"
+
+        for folder_name in selected_folders:
+            # Your code to delete the folder goes here
+            folder_path = os.path.join(self.path_photos_from_camera, folder_name)
+            try:
+                # Recursive deletion of folder and its content
+                shutil.rmtree(folder_path)
+                print("Folder deleted:", folder_path)
+                # Remove UI elements after deletion
+                self.file_listbox.delete(0, tk.END)
+                self.management_toplevel.destroy()
+                # Show a pop-up modal upon successful deletion
+                
+                self.show_popup("Users Deleted", f" {users_deleted} \n Users deleted successfully!")
+
+            except OSError as e:
+                print(f"Error: {folder_path} : {e.strerror}")
+
+    def show_popup(self, title, message):
+        popup = tk.Toplevel()
+        popup.title(title)
+        popup.geometry("400x300")
+        label = ttk.Label(popup, text=message, bootstyle="success")
+        label.place(relx=0.5, rely=0.3, anchor="center")
+
+        ok_button = ttk.Button(popup, text="<--- OK --->", bootstyle="success, outline", command=popup.destroy)
+        ok_button.place(relx=0.5, rely=0.7, anchor="center")
+
+        
     def switch_mode(self):
         self.recognition_mode = not self.recognition_mode
         if self.recognition_mode:
@@ -156,7 +228,7 @@ class AttendanceTracking:
             if self.name:
                 dir_list = os.listdir(self.path_photos_from_camera)
                 if self.name in dir_list:
-                    image_path = f'./data/data_faces_from_camera/{self.name}/img_face_2.jpg'
+                    image_path = f'./data/data_faces_from_camera/{self.name}/img_face_1.jpg'
             # Load the original image
             original_img = Image.open(image_path)
             original_img = original_img.resize((200, 200), Image.ANTIALIAS)  # Resize the image if necessary
@@ -205,18 +277,21 @@ class AttendanceTracking:
 
 
         name = self.name
-        self.user_name_btn = ttk.Label(self.recognition_UI_frame, text=f'UserName: {name}', bootstyle="success")
+        self.user_name_btn = ttk.Label(self.recognition_UI_frame,
+                                        text=f'Username: {name}',
+                                        font=25,
+                                        bootstyle="warning")
         self.user_name_btn.pack(fill="both", expand=True)
 
         submit_btn = ttk.Button(self.recognition_UI_frame,
-                                text="Submit",
+                                text="Submit attendance",
                                 bootstyle = "success, outline",
                                 command=self.submit_data_into_database)
         submit_btn.pack(side='bottom', fill="both", expand=True)
         
     def update_display_name(self):
         if self.user_name_btn.winfo_exists():
-            self.user_name_btn.configure(text=f'UserName: {self.name}')
+            self.user_name_btn.configure(text=f'Username: {self.name}')
 
     def submit_data_into_database(self):
         self.mysql_connection.write_data_into_attendance(self.name)
@@ -226,14 +301,14 @@ class AttendanceTracking:
         self.register_ui_frame.place(relx=0.57, rely=0.15, relwidth=1, relheight=1)
         header_register_btn = ttk.Label(self.register_ui_frame, 
                                         text = "Face Register", 
-                                        font=25, 
+                                        font=45, 
                                         bootstyle="success")
         step1_input_name_btn = ttk.Label(self.register_ui_frame, 
                                         text = "Step 1: Input Name", 
                                         font=15, 
-                                        bootstyle="success")
+                                        bootstyle="warning")
         input_name_btn = ttk.Label(self.register_ui_frame, 
-                                        text = "Full-Name: Soy Vitou", 
+                                        text = "Full-Name: ", 
                                         font=10, 
                                         bootstyle="success")
         
@@ -246,27 +321,46 @@ class AttendanceTracking:
         step2_input_save_btn = ttk.Label(self.register_ui_frame, 
                                         text = "Step 2: Save Face Image", 
                                         font=15, 
-                                        bootstyle="success")
+                                        bootstyle="warning")
         save_current_face_btn = ttk.Button(self.register_ui_frame, 
                                         text = "Save Current Face",
                                         command=self.save_current_face,
-                                        bootstyle="success")
+                                        bootstyle="success, outline")
+        step3_input_save_btn = ttk.Label(self.register_ui_frame, 
+                                        text = "Step 3: Compile Image", 
+                                        font=15, 
+                                        bootstyle="warning")
+        
         compile_feature_btn = ttk.Button(self.register_ui_frame, 
-                                        text = "Register",
+                                        text = "Register to Database",
                                         command=self.register_feature_fn,
-                                        bootstyle="success")
+                                        bootstyle="success, outline")
         
         header_register_btn.grid(row=0, column=0, columnspan=3, padx=10, pady=10)
-        step1_input_name_btn.grid(row=1, column=0, padx=10, pady=10)
+        step1_input_name_btn.grid(row=1, column=0, padx=10, pady=10, sticky='w')
         input_name_btn.grid(row=2, column=0, pady=10)
         self.input_name2_btn.grid(row=2, column=1, pady=10)
-        step2_input_save_btn.grid(row=3, column=0, padx=10, pady=10)
+        step2_input_save_btn.grid(row=3, column=0, padx=10, pady=10, sticky='w')
         save_current_face_btn.grid(row=4, column=0, columnspan=3, padx=10, pady=10)
-        compile_feature_btn.grid(row=5, column=0, columnspan=3, padx=10, pady=10)
+        step3_input_save_btn.grid(row=5, column=0, padx=10, pady=10, sticky='w')
+        compile_feature_btn.grid(row=7, column=0, columnspan=3, padx=10, pady=10)
+
+    def draw_progress_bar(self):
+        self.progress_bar = ttk.Progressbar(self.register_ui_frame, 
+                                            mode="determinate", 
+                                            maximum=200)
+        self.progress_bar.grid(row=6, column=0, columnspan=3, padx=10, pady=10)
+        self.progress_bar.start(10)
+
+
+        
+
 
     def register_feature_fn(self):
-        main_thread = threading.Thread(target=main)
-        main_thread.start()
+        self.feature_thread = threading.Thread(target=feature_extraction)
+        self.feature_thread.start()
+        self.get_face_database()
+       
 
     def destroy_register_ui(self):
         self.register_ui_frame.destroy()
@@ -408,10 +502,6 @@ class AttendanceTracking:
             self.log_all["text"] = "No face in current frame!"
 
 
-
-
-
-
     def process(self):
         ret, frame = self.video_capture.read()
         img_rd = frame
@@ -426,6 +516,8 @@ class AttendanceTracking:
             
             if self.recognition_mode:
                 # refresh recognition image
+                if self.check_progress_boolean:
+                    self.check_progress()
                 current_time = datetime.datetime.now()
                 time_difference = current_time - self.previous_time
                 threshold = datetime.timedelta(seconds=5)
@@ -457,6 +549,7 @@ class AttendanceTracking:
                     self.update_display_name()
             else:
                 self.label_face_cnt["text"] = str(len(faces))
+                
                 #  Face detected
                 if len(faces) != 0 and len(faces) < 2:
                     #   Show the ROI of faces
@@ -509,7 +602,7 @@ class AttendanceTracking:
 
         # Add other UI elements as needed
         self.video_frame = ttk.Label(self.root, borderwidth=5, relief='groove')
-        self.video_frame.place(width=560, height=470, relx=0.03, rely=0.03)
+        self.video_frame.place(width=600, height=470, relx=0.01, rely=0.03)
 
     def update_video(self):
         self.process()
@@ -519,6 +612,6 @@ class AttendanceTracking:
 
 
 
-root = ttk.Window(themename="superhero")
+root = ttk.Window(themename="darkly")
 app = AttendanceTracking(root)
 app.main()
