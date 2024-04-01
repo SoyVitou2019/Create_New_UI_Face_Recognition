@@ -7,7 +7,6 @@ from tkinter import *
 import numpy as np
 import pandas as pd
 import ttkbootstrap as ttk
-from tkinter import filedialog, messagebox
 import cv2
 from PIL import Image, ImageTk
 import dlib
@@ -35,7 +34,6 @@ class AttendanceTracking:
         self.recognition_mode = False
         self.previous_time = datetime.datetime.now()
         self.progress_bar = None
-        self.check_progress_boolean = False
         # Face Recognition Variable
         
         self.face_features_known_list = []
@@ -354,8 +352,6 @@ class AttendanceTracking:
 
 
         
-
-
     def register_feature_fn(self):
         self.feature_thread = threading.Thread(target=feature_extraction)
         self.feature_thread.start()
@@ -371,7 +367,6 @@ class AttendanceTracking:
     def get_name_from_entry(self):
         input_value = self.input_name2_btn.get()
         self.input_name_char = input_value.replace(" ", '-').lower()
-        # print(self.input_name_char)
     
     def prediction(self, faces, img_rd):
         # 6.1  if cnt not changes
@@ -450,6 +445,7 @@ class AttendanceTracking:
                     similar_person_num = self.current_frame_face_X_e_distance_list.index(
                         min(self.current_frame_face_X_e_distance_list))
 
+                    # Important Threshold prediction 
                     if min(self.current_frame_face_X_e_distance_list) < 0.4:
                         self.current_frame_face_name_list[k] = self.face_name_known_list[similar_person_num]
                         
@@ -515,9 +511,6 @@ class AttendanceTracking:
 
             
             if self.recognition_mode:
-                # refresh recognition image
-                if self.check_progress_boolean:
-                    self.check_progress()
                 current_time = datetime.datetime.now()
                 time_difference = current_time - self.previous_time
                 threshold = datetime.timedelta(seconds=5)
@@ -542,11 +535,13 @@ class AttendanceTracking:
                 self.last_frame_face_centroid_list = self.current_frame_face_centroid_list
                 self.current_frame_face_centroid_list = []
 
-                result_threading = threading.Thread(target=self.prediction, args=(faces, img_rd))
-                result_threading.start()
-                if not result_threading.is_alive() and self.name:
+                if len(faces) < 2:
+                    result_threading = threading.Thread(target=self.prediction, args=(faces, img_rd))
+                    result_threading.start()
                     self.update_image_recognition()
                     self.update_display_name()
+                if len(faces) > 2:
+                    print("user > 2")
             else:
                 self.label_face_cnt["text"] = str(len(faces))
                 
