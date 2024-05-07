@@ -290,10 +290,24 @@ class AttendanceTracking:
 
     def submit_data_into_database(self):
         self.mysql_connection.write_data_into_attendance(self.name)
+        style = "success"
+        message = "Successfully"
+        if self.name == None:
+            style = "danger"
+            message = "Fail to submit attendance"
+        popup = tk.Toplevel()
+        popup.title("Attendance")
+        popup.geometry("500x300")
+        label = ttk.Label(popup, text=message, bootstyle=style, font=("Helvetica", 20))
+        label.place(relx=0.5, rely=0.3, anchor="center")
         self.name = None
         self.update_display_name()
         self.img_label.configure(image=self.save_fake_icons_tk)
         self.img_label.image = self.save_fake_icons_tk
+        
+
+        ok_button = ttk.Button(popup, text="<--- OK --->", bootstyle="success, outline", command=popup.destroy)
+        ok_button.place(relx=0.5, rely=0.7, anchor="center")
 
     def draw_right_part_register_info_ui(self):
         self.register_ui_frame.place(relx=0.57, rely=0.15, relwidth=1, relheight=1)
@@ -509,11 +523,10 @@ class AttendanceTracking:
             for face in faces:
                 cv2.rectangle(img_rd, (face.left(), face.top()), (face.right(), face.bottom()), (0, 255, 0), 2)
 
-            
             if self.recognition_mode:
                 current_time = datetime.datetime.now()
                 time_difference = current_time - self.previous_time
-                threshold = datetime.timedelta(seconds=5)
+                threshold = datetime.timedelta(seconds=10)
                 if self.current_frame_face_cnt > 0:
                     self.previous_time = current_time
                 if time_difference > threshold:

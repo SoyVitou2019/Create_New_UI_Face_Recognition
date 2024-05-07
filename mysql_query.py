@@ -42,19 +42,20 @@ class MysqlQuery:
         
     def write_data_into_attendance(self, name):
         user_id, shift_id = self.get_user_id_by_username(username=name)
-        # shift_id = int(shift_id)
-        check_status = self.check_in_or_out(user_id=user_id)
-        if check_status == None:
-            check_status = 0
-        else:
-            check_status = not check_status
+        if user_id:
+            # shift_id = int(shift_id)
+            check_status = self.check_in_or_out(user_id=user_id)
+            if check_status == None:
+                check_status = 0
+            else:
+                check_status = not check_status
 
-        cursor = self.conn.cursor()
-        data = [user_id, check_status]
-        insert_query = "INSERT INTO attendances (user_id, check_status) VALUES (%s, %s)"
-        cursor.execute(insert_query, data)
-        self.conn.commit()
-        print("successfully")
+            cursor = self.conn.cursor()
+            data = [user_id, check_status]
+            insert_query = "INSERT INTO attendances (user_id, check_status) VALUES (%s, %s)"
+            cursor.execute(insert_query, data)
+            self.conn.commit()
+            print("successfully")
 
     def close_connection(self):
         if self.conn.is_connected():
