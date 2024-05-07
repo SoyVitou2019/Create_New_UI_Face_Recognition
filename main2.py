@@ -34,6 +34,7 @@ class AttendanceTracking:
         self.recognition_mode = False
         self.previous_time = datetime.datetime.now()
         self.progress_bar = None
+        self.is_prediction = False
         # Face Recognition Variable
         
         self.face_features_known_list = []
@@ -71,11 +72,8 @@ class AttendanceTracking:
         self.hh = 0
         # GUI part
         self.frame_right_info = tk.Frame(self.root)
-        self.label_warning = tk.Label(self.frame_right_info)
         self.label_face_cnt = tk.Label(self.frame_right_info, text="Faces in current frame: ")
         self.log_all = tk.Label(self.frame_right_info)
-
-        
 
         # Face Recognition Function
         self.video_capture = cv2.VideoCapture(0)
@@ -206,6 +204,7 @@ class AttendanceTracking:
 
         ok_button = ttk.Button(popup, text="<--- OK --->", bootstyle="success, outline", command=popup.destroy)
         ok_button.place(relx=0.5, rely=0.7, anchor="center")
+
         
     def switch_mode(self):
         self.recognition_mode = not self.recognition_mode
@@ -247,6 +246,7 @@ class AttendanceTracking:
     def draw_right_part_recognition_UI(self):
         self.recognition_UI_frame.place(relx=0.68, rely=0.2, relwidth=0.2, relheight=0.6)
 
+
         image_path = "./images/fake_profile.png"
         
         # Load the original image
@@ -271,6 +271,7 @@ class AttendanceTracking:
         self.img_label.image = img_with_frame_tk  # Keep a reference to prevent garbage collection
         self.img_label.pack(side='top', fill="both", expand=True)
 
+
         name = self.name
         self.user_name_btn = ttk.Label(self.recognition_UI_frame,
                                         text=f'Username: {name}',
@@ -278,9 +279,14 @@ class AttendanceTracking:
                                         bootstyle="warning")
         self.user_name_btn.pack(fill="both", expand=True)
 
+        scan_btn = ttk.Button(self.recognition_UI_frame,
+                                        text="Scan Face",
+                                        bootstyle = "success",
+                                        command=self.click_prediction)
+        scan_btn.pack(fill="both", pady=20, expand=True)
         submit_btn = ttk.Button(self.recognition_UI_frame,
                                 text="Submit attendance",
-                                bootstyle = "success, outline",
+                                bootstyle = "success",
                                 command=self.submit_data_into_database)
         submit_btn.pack(side='bottom', fill="both", expand=True)
         
@@ -290,10 +296,7 @@ class AttendanceTracking:
 
     def submit_data_into_database(self):
         self.mysql_connection.write_data_into_attendance(self.name)
-        self.name = None
-        self.update_display_name()
-        self.img_label.configure(image=self.save_fake_icons_tk)
-        self.img_label.image = self.save_fake_icons_tk
+
 
     def draw_right_part_register_info_ui(self):
         self.register_ui_frame.place(relx=0.57, rely=0.15, relwidth=1, relheight=1)
@@ -353,9 +356,7 @@ class AttendanceTracking:
 
         
     def register_feature_fn(self):
-        self.feature_thread = threading.Thread(target=feature_extraction)
-        self.feature_thread.start()
-        self.get_face_database()
+        feature_extraction()
        
 
     def destroy_register_ui(self):
@@ -445,13 +446,14 @@ class AttendanceTracking:
                     similar_person_num = self.current_frame_face_X_e_distance_list.index(
                         min(self.current_frame_face_X_e_distance_list))
 
-                    # Important Threshold prediction confident > 60%
+                    # Important Threshold prediction 
                     if min(self.current_frame_face_X_e_distance_list) < 0.4:
                         self.current_frame_face_name_list[k] = self.face_name_known_list[similar_person_num]
                         
                         # Insert attendance record
                         nam =self.face_name_known_list[similar_person_num]
                         self.name = nam
+                        self.is_prediction = False
 
 
     # Face Register Part
@@ -497,14 +499,19 @@ class AttendanceTracking:
         else:
             self.log_all["text"] = "No face in current frame!"
 
+    def click_prediction(self):
+        self.is_prediction = True
 
     def process(self):
-        ret, frame = self.video_capture.read()
-        img_rd = frame
-        self.current_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        ret, self.frame = self.video_capture.read()
+        if not self.is_prediction:
+            old_frame = self.frame
+        self.frame = old_frame
+        img_rd = self.frame
+        self.current_frame = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
         if ret:
             # Recognition
-            faces = self.detector(frame, 0)
+            faces = self.detector(self.frame, 0)
             
             for face in faces:
                 cv2.rectangle(img_rd, (face.left(), face.top()), (face.right(), face.bottom()), (0, 255, 0), 2)
@@ -521,7 +528,6 @@ class AttendanceTracking:
                     self.update_display_name()
                     self.img_label.configure(image=self.save_fake_icons_tk)
                     self.img_label.image = self.save_fake_icons_tk
-                    print("5 seconds have passed.")
                     self.previous_time = current_time
 
                 # 3.  Update cnt for faces in frames
@@ -536,8 +542,9 @@ class AttendanceTracking:
                 self.current_frame_face_centroid_list = []
 
                 if len(faces) < 2:
-                    result_threading = threading.Thread(target=self.prediction, args=(faces, img_rd))
-                    result_threading.start()
+                    if self.is_prediction:
+                        result_threading = threading.Thread(target=self.prediction, args=(faces, img_rd))
+                        result_threading.start()
                     self.update_image_recognition()
                     self.update_display_name()
                 if len(faces) > 2:
@@ -560,13 +567,10 @@ class AttendanceTracking:
                         # If the size of ROI > 480x640
                         if (d.right() + self.ww) > 640 or (d.bottom() + self.hh > 480) or (d.left() - self.ww < 0) or (
                             d.top() - self.hh < 0):
-                            self.label_warning["text"] = "OUT OF RANGE"
-                            self.label_warning['fg'] = 'red'
                             self.out_of_range_flag = True
                             color_rectangle = (255, 0, 0)
                         else:
                             self.out_of_range_flag = False
-                            self.label_warning["text"] = ""
                             color_rectangle = (255, 255, 255)
                         self.current_frame = cv2.rectangle(self.current_frame,
                                                         tuple([d.left() - self.ww, d.top() - self.hh]),
@@ -576,13 +580,13 @@ class AttendanceTracking:
                 self.current_frame_faces_cnt = len(faces)
                         
             # Display the updated frame
-            frame = cv2.cvtColor(img_rd, cv2.COLOR_BGR2RGB)
-            frame = Image.fromarray(frame)
-            frame = ImageTk.PhotoImage(frame)
-            self.video_frame.config(image=frame)
+            frame_update = cv2.cvtColor(img_rd, cv2.COLOR_BGR2RGB)
+            frame_update = Image.fromarray(frame_update)
+            frame_update = ImageTk.PhotoImage(frame_update)
+            self.video_frame.config(image=frame_update)
 
             # Keep a reference to prevent garbage collection
-            self.video_frame.image = frame  
+            self.video_frame.image = frame_update  
         
         
             
@@ -597,7 +601,7 @@ class AttendanceTracking:
 
         # Add other UI elements as needed
         self.video_frame = ttk.Label(self.root, borderwidth=5, relief='groove')
-        self.video_frame.place(width=600, height=470, relx=0.01, rely=0.03)
+        self.video_frame.place(width=550, height=470, relx=-0.13, rely=0.03)
 
     def update_video(self):
         self.process()
