@@ -34,6 +34,7 @@ class AttendanceTracking:
         self.recognition_mode = False
         self.previous_time = datetime.datetime.now()
         self.progress_bar = None
+        self.register_face_processing = False
         # Face Recognition Variable
         
         self.face_features_known_list = []
@@ -369,7 +370,20 @@ class AttendanceTracking:
     def register_feature_fn(self):
         self.feature_thread = threading.Thread(target=feature_extraction)
         self.feature_thread.start()
-        self.get_face_database()
+        self.register_face_processing = True
+        self.during_feature_thread_process()
+
+    def during_feature_thread_process(self):
+        popup = tk.Toplevel(self.root)
+        popup.title("Processing")
+        popup.geometry("500x300")
+        
+        message = "Loading..."
+        style = "success"
+        label = ttk.Label(popup, text=message, bootstyle=style, font=("Helvetica", 20))
+        label.place(relx=0.5, rely=0.3, anchor="center")
+
+        self.check_thread(popup, label)
        
 
     def destroy_register_ui(self):
@@ -491,6 +505,9 @@ class AttendanceTracking:
             already_created = True
         if not already_created:
             self.create_face_folder()
+        
+        message = "Fail to save your face"
+        style = "danger"
   
         if self.current_frame_faces_cnt == 1:
             if not self.out_of_range_flag:
@@ -505,11 +522,19 @@ class AttendanceTracking:
                 self.face_ROI_image = cv2.cvtColor(self.face_ROI_image, cv2.COLOR_BGR2RGB)
 
                 cv2.imwrite(self.current_face_dir + "/img_face_" + str(self.ss_cnt) + ".jpg", self.face_ROI_image)
+                message = "Successfully"
+                style = "success"
                 
             else:
                 self.log_all["text"] = "Please do not out of range!"
         else:
             self.log_all["text"] = "No face in current frame!"
+
+        popup = tk.Toplevel()
+        popup.title("Save face modal")
+        popup.geometry("500x300")
+        label = ttk.Label(popup, text=message, bootstyle=style, font=("Helvetica", 20))
+        label.place(relx=0.5, rely=0.3, anchor="center")
 
 
     def process(self):
@@ -601,6 +626,19 @@ class AttendanceTracking:
             
         # Update every 10 milliseconds 
         self.root.after(10, self.update_video)  
+        
+
+    def check_thread(self, popup, label):
+        if self.feature_thread.is_alive():
+            self.root.after(100, self.check_thread, popup, label)
+        else:
+            self.register_face_processing = False
+            label.config(text="Feature extraction completed", bootstyle="info")
+            # You can also add a button to close the popup after completion
+            close_button = ttk.Button(popup, text="Close", command=popup.destroy)
+            close_button.place(relx=0.5, rely=0.7, anchor="center")
+            # Call the method to get the face database after the thread is done
+            self.get_face_database()
 
     def wraper_switch_ui(self):
         # Draw the initial login UI
