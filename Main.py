@@ -193,8 +193,6 @@ class AttendanceTracking:
                 self.file_listbox.delete(0, tk.END)
                 self.management_toplevel.destroy()
                 # Show a pop-up modal upon successful deletion
-                
-                self.show_popup("Users Deleted", f" {users_deleted} \n Users deleted successfully!")
 
             except OSError as e:
                 print(f"Error: {folder_path} : {e.strerror}")
