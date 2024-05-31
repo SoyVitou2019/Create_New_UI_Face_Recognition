@@ -49,10 +49,11 @@ class MysqlQuery:
                 check_status = 0
             else:
                 check_status = not check_status
-
+            created_at = datetime.datetime.now()
             cursor = self.conn.cursor()
-            data = [user_id, check_status]
-            insert_query = "INSERT INTO attendances (user_id, check_status) VALUES (%s, %s)"
+            print(created_at)
+            data = [user_id, check_status, created_at, created_at]
+            insert_query = "INSERT INTO attendances (user_id, check_status, created_at, updated_at) VALUES (%s, %s, %s, %s)"
             cursor.execute(insert_query, data)
             self.conn.commit()
             print("successfully")
