@@ -188,6 +188,7 @@ class AttendanceTracking:
                 # Recursive deletion of folder and its content
                 shutil.rmtree(folder_path)
                 self.register_feature_fn()
+                self.get_face_database()
                 print("Folder deleted:", folder_path)
                 # Remove UI elements after deletion
                 self.file_listbox.delete(0, tk.END)
