@@ -64,7 +64,7 @@ def return_features_mean_personX(path_face_personX):
     return features_mean_personX
 
 
-def main():
+def feature_extraction():
     logging.basicConfig(level=logging.INFO)
     #  Get the order of latest person
     person_list = os.listdir("data/data_faces_from_camera/")
