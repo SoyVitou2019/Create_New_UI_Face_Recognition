@@ -474,6 +474,7 @@ class AttendanceTracking:
 
                     # Important Threshold prediction confident > 60%
                     if min(self.current_frame_face_X_e_distance_list) < 0.4:
+                        print(len(self.face_features_known_list), similar_person_num)
                         self.current_frame_face_name_list[k] = self.face_name_known_list[similar_person_num]
                         
                         # Insert attendance record
